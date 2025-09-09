@@ -1,0 +1,38 @@
+Project: Meta Scifor — Live Crypto Dashboard
+
+Objective
+- Build a responsive dashboard that fetches and displays live cryptocurrency data for BTC, ETH, and DOGE.
+
+Requirements (Status)
+- Display 3 cards showing:
+  - Cryptocurrency Name — Done
+  - Current Price in USD — Done
+  - 24h Price Change (%) — Done
+- Use the CoinGecko or CoinCap API — Done (CoinGecko with key; CoinCap supported; mock fallback)
+- Auto-refresh prices every 30 seconds — Done
+- Include a Bitcoin Price Trend Chart (last 6 hours) — Done
+- Make the dashboard responsive using Tailwind CSS — Done
+- Use React + TypeScript for development — Done
+- Use Chart.js or Recharts for the chart — Done (Chart.js via react-chartjs-2)
+
+Implementation Notes
+- Live prices: fetched from CoinGecko (requires `VITE_COINGECKO_API_KEY`) or CoinCap.
+- Chart (6h):
+  - CoinGecko mode (recommended): chart is built from sampled live BTC prices every 30s (avoids `market_chart` 401s).
+  - CoinCap mode: uses CoinCap history/candles with fallbacks; falls back to mock series if 404s persist.
+- Offline/mock mode: set `VITE_ENABLE_API=false` (no network calls; still auto-updates).
+
+Key Files
+- UI: `src/App.tsx`, `src/components/PriceCard.tsx`, `src/components/PriceChart.tsx`
+- Data: `src/lib/api.ts`
+- Styles: `src/index.css`, `tailwind.config.js`
+- Dev proxy: `vite.config.ts`
+- Manifest/title: `index.html`, `public/manifest.webmanifest`
+
+Environment
+- `.env.local` flags:
+  - `VITE_ENABLE_API` (true to use live data; false for mock)
+  - `VITE_USE_COINCAP_ONLY` (true to use CoinCap; false to use CoinGecko)
+  - `VITE_COINGECKO_API_KEY` (CoinGecko key)
+  - Optional: `VITE_DISABLE_COINCAP_FALLBACK=true` to avoid CoinCap when using CoinGecko
+

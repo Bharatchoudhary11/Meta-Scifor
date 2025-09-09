@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PriceCard } from './components/PriceCard';
 import { PriceChart } from './components/PriceChart';
-import { fetchBtcHistory, fetchSimplePrices } from './lib/api';
+import { fetchBtcHistory, fetchSimplePrices, appendBtcSample, loadBtcSeries } from './lib/api';
 import type { CoinId, TickerData } from './types';
 
 const REFRESH_MS = 30_000; // 30 seconds
@@ -24,13 +24,22 @@ export default function App() {
   async function load() {
     try {
       setError(null);
-      const [prices, chart] = await Promise.all([
-        fetchSimplePrices(),
-        fetchBtcHistory(rangeHours),
-      ]);
+      const prices = await fetchSimplePrices();
       setTickers(prices);
-      setChartLabels(chart.labels);
-      setChartData(chart.prices);
+      // Update local BTC series from current price sample
+      const btc = prices.find(p => p.id === 'bitcoin');
+      if (btc) appendBtcSample(btc.priceUsd);
+      // Choose chart source:
+      const useCoinCapOnly = (import.meta as any).env?.VITE_USE_COINCAP_ONLY === 'true';
+      if (useCoinCapOnly) {
+        const chart = await fetchBtcHistory(rangeHours);
+        setChartLabels(chart.labels);
+        setChartData(chart.prices);
+      } else {
+        const chart = loadBtcSeries(rangeHours);
+        setChartLabels(chart.labels);
+        setChartData(chart.prices);
+      }
       setLastUpdated(Date.now());
     } catch (e: any) {
       setError(e?.message ?? 'Failed to load data');

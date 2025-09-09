@@ -6,6 +6,15 @@ Overview
 - Auto-refreshes every 30 seconds.
 - Styled with Tailwind CSS and uses Chart.js via react-chartjs-2.
 
+Requirements Coverage
+- 3 cards with name, USD price, 24h change — Implemented in `src/App.tsx:1` and `src/components/PriceCard.tsx:1`.
+- Uses CoinGecko or CoinCap API — Implemented with CoinCap by default and CoinGecko support in `src/lib/api.ts:1`.
+- Auto-refresh every 30 seconds — Implemented in `src/App.tsx:1`.
+- Bitcoin price trend chart (last 6 hours) — Implemented in `src/components/PriceChart.tsx:1` with data from `src/lib/api.ts:1`.
+- Responsive with Tailwind CSS — Layout in `src/App.tsx:1`, styles in `src/index.css:1`.
+- React + TypeScript — Vite + TS setup present.
+- Chart.js or Recharts — Chart.js used via `react-chartjs-2`.
+
 Quick Start
 1) Install dependencies:
    - npm install

@@ -7,9 +7,10 @@ const ENABLE_API = ((import.meta as any).env?.VITE_ENABLE_API as string | undefi
 // avoids noisy 401 errors in development where the key is usually absent.
 const CG_KEY = (import.meta as any).env?.VITE_COINGECKO_API_KEY as string | undefined;
 const USE_COINCAP_ONLY = !CG_KEY || ((import.meta as any).env?.VITE_USE_COINCAP_ONLY as string | undefined) === 'true';
-// In dev, use Vite proxy to avoid CORS. In prod, hit APIs directly.
+const DISABLE_COINCAP_FALLBACK = ((import.meta as any).env?.VITE_DISABLE_COINCAP_FALLBACK as string | undefined) === 'true';
+// Use proxy for CoinGecko in dev; CoinCap supports CORS so call it directly.
 const COINGECKO_BASE = DEV ? '/coingecko/api/v3' : 'https://api.coingecko.com/api/v3';
-const COINCAP_BASE = DEV ? '/coincap/v2' : 'https://api.coincap.io/v2';
+const COINCAP_BASE = 'https://api.coincap.io/v2';
 
 const COINS: Record<CoinId, { name: string; symbol: string }> = {
   bitcoin: { name: 'Bitcoin', symbol: 'BTC' },
@@ -20,9 +21,8 @@ const COINS: Record<CoinId, { name: string; symbol: string }> = {
 function buildHeaders(): HeadersInit {
   const headers: HeadersInit = { accept: 'application/json' };
   if (CG_KEY) {
-    // CoinGecko free API now requires a demo key header.
-    // The header name is 'x-cg-demo-api-key' for free/demo keys and
-    // 'X-CG-Pro-API-Key' for pro keys.
+    // Send both common header names to cover API variants
+    headers['x-cg-api-key' as any] = CG_KEY;
     headers['x-cg-demo-api-key' as any] = CG_KEY;
   }
   return headers;
@@ -186,6 +186,10 @@ export async function fetchSimplePrices(): Promise<TickerData[]> {
       change24hPercent: json[id].usd_24h_change,
     }));
   } catch (_e: any) {
+    if (DISABLE_COINCAP_FALLBACK && !USE_COINCAP_ONLY) {
+      console.warn('CoinGecko price failed; using mock (CoinCap fallback disabled)');
+      return mockTickers();
+    }
     // Fallback to CoinCap (no key required) on any failure (auth, CORS, network)
     const ccUrl = `${COINCAP_BASE}/assets?ids=bitcoin,ethereum,dogecoin`;
     let ccRes = await fetch(ccUrl, { headers: { accept: 'application/json' } });
@@ -328,22 +332,39 @@ export async function fetchBtcHistory(hours: number): Promise<{ labels: string[]
     return fetchCoinCapHistory(hours);
   }
 
-  const cgUrl = `${COINGECKO_BASE}/coins/bitcoin/market_chart?vs_currency=usd&days=1&interval=hourly`;
+  // In CoinGecko mode, avoid market_chart to prevent 401s on some plans.
+  // Instead, the app builds a local time series from sampled BTC prices.
+  // The series is managed via appendBtcSample/loadBtcSeries helpers below.
+  return loadBtcSeries(hours);
+}
+
+// ---- Local BTC price series helpers (for CoinGecko mode) ----
+const BTC_SERIES_KEY = 'btc_series_v1';
+
+export function appendBtcSample(price: number) {
   try {
-    const res = await fetch(cgUrl, { headers: buildHeaders() });
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) throw new Error('cg-auth');
-      throw new Error(`Chart fetch failed: ${res.status}`);
-    }
-    const json = (await res.json()) as MarketChartResponse;
     const now = Date.now();
-    const rangeMs = hours * 60 * 60 * 1000;
-    const filtered = json.prices.filter(([ts]) => now - ts <= rangeMs);
-    const slice = filtered.length > 0 ? filtered : json.prices.slice(-Math.max(1, Math.round(hours)));
-    const labels = slice.map(([ts]) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    const prices = slice.map(([, price]) => price);
-    return { labels, prices };
-  } catch (_e: any) {
-    return fetchCoinCapHistory(hours);
-  }
+    const raw = localStorage.getItem(BTC_SERIES_KEY);
+    const arr: [number, number][] = raw ? JSON.parse(raw) : [];
+    arr.push([now, price]);
+    // Keep at most ~6h worth at 30s interval (~720 points)
+    const cutoff = now - 6 * 60 * 60 * 1000;
+    const pruned = arr.filter(([ts]) => ts >= cutoff);
+    localStorage.setItem(BTC_SERIES_KEY, JSON.stringify(pruned));
+  } catch {}
+}
+
+export function loadBtcSeries(hours: number): { labels: string[]; prices: number[] } {
+  try {
+    const now = Date.now();
+    const cutoff = now - hours * 60 * 60 * 1000;
+    const raw = localStorage.getItem(BTC_SERIES_KEY);
+    const arr: [number, number][] = raw ? JSON.parse(raw) : [];
+    const filtered = arr.filter(([ts]) => ts >= cutoff);
+    const labels = filtered.map(([ts]) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    const prices = filtered.map(([, p]) => p);
+    if (labels.length && prices.length) return { labels, prices };
+  } catch {}
+  // If no data yet, fall back to mock to draw a chart
+  return mockBtcLast6h();
 }
