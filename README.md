@@ -22,6 +22,14 @@ Notes
   - CoinCap prices fallback: /v2/assets?ids=bitcoin,ethereum,dogecoin
   - CoinCap chart fallback: /v2/assets/bitcoin/history?interval=m15&start=...&end=...
 
+Offline Mode (no API calls)
+- By default, the app now runs in offline/mock mode and does not call any external APIs. Prices and the BTC chart are generated locally via a small random-walk simulation.
+- To enable live APIs, set in `.env.local`:
+  - VITE_ENABLE_API=true
+  - Optionally: VITE_COINGECKO_API_KEY=your_key_here
+  - Optional dev-only bypass: VITE_USE_COINCAP_ONLY=true (skip CoinGecko)
+  Then restart the dev server.
+
 CoinGecko API Key (401 fixes)
 - CoinGecko now often requires an API key. If 401/403 occurs, the app will automatically fall back to CoinCap.
 - To keep using CoinGecko, add a free key:

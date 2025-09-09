@@ -1,0 +1,11 @@
+{
+  "name": "Live Crypto Dashboard",
+  "short_name": "CryptoDash",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#111827",
+  "description": "BTC, ETH, DOGE prices with a BTC trend chart.",
+  "icons": []
+}
+
