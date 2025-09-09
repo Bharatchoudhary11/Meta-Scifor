@@ -82,6 +82,53 @@ function mockBtcLast6h() {
   return { labels, prices };
 }
 
+async function fetchCoinCapHistory(hours: number): Promise<{ labels: string[]; prices: number[] }> {
+  // Safety margin to avoid future timestamps if system clock is ahead
+  const now = Date.now() - 120_000;
+  const rangeMs = hours * 60 * 60 * 1000;
+  const start = now - rangeMs;
+  const withRange = `${COINCAP_BASE}/assets/bitcoin/history?interval=m15&start=${start}&end=${now}`;
+  const noRange = `${COINCAP_BASE}/assets/bitcoin/history?interval=m15`;
+
+  let res = await fetch(withRange, { headers: { accept: 'application/json' } });
+  if (!res.ok) {
+    res = await fetch(noRange, { headers: { accept: 'application/json' } });
+  }
+  let points: Array<{ priceUsd: string; time: number }> = [];
+  if (res.ok) {
+    const json = await res.json() as { data: Array<{ priceUsd: string; time: number }> };
+    points = json.data || [];
+  }
+  if (!points.length) {
+    const candlesUrl = `${COINCAP_BASE}/candles?exchange=binance&interval=m15&baseId=bitcoin&quoteId=tether&start=${start}&end=${now}`;
+    let cRes = await fetch(candlesUrl, { headers: { accept: 'application/json' } });
+    if (!cRes.ok) {
+      const candlesH1 = `${COINCAP_BASE}/candles?exchange=binance&interval=h1&baseId=bitcoin&quoteId=tether&start=${start}&end=${now}`;
+      cRes = await fetch(candlesH1, { headers: { accept: 'application/json' } });
+    }
+    if (cRes.ok) {
+      const cjson = await cRes.json() as { data: Array<{ period: number; close: number }> };
+      const cpoints = (cjson.data || []);
+      const keep = Math.max(1, Math.round((hours * 60) / 15));
+      const latest = cpoints.slice(-keep);
+      if (latest.length) {
+        const labels = latest.map(p => new Date(p.period).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        const prices = latest.map(p => Number(p.close));
+        return { labels, prices };
+      }
+    }
+    if (!res.ok) {
+      console.warn(`CoinCap chart failed: ${res.status}; using mock data`);
+      return mockBtcLast6h();
+    }
+  }
+  const keep = Math.max(1, Math.round((hours * 60) / 15));
+  const recent = points.slice(-keep);
+  const labels = recent.map(p => new Date(p.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  const prices = recent.map(p => Number(p.priceUsd));
+  return { labels, prices };
+}
+
 export async function fetchSimplePrices(): Promise<TickerData[]> {
   if (!ENABLE_API) return mockTickers();
   const ids: CoinId[] = ['bitcoin', 'ethereum', 'dogecoin'];
@@ -278,19 +325,7 @@ export async function fetchBtcHistory(hours: number): Promise<{ labels: string[]
   }
 
   if (USE_COINCAP_ONLY) {
-    // Safety margin to avoid future timestamps if system clock is ahead
-    const now = Date.now() - 120_000;
-    const rangeMs = hours * 60 * 60 * 1000;
-    const start = now - rangeMs;
-    const ccUrl = `${COINCAP_BASE}/assets/bitcoin/history?interval=m15&start=${start}&end=${now}`;
-    const res = await fetch(ccUrl, { headers: { accept: 'application/json' } });
-    if (!res.ok) throw new Error(`CoinCap chart failed: ${res.status}`);
-    const json = await res.json() as { data: Array<{ priceUsd: string; time: number }> };
-    const keep = Math.max(1, Math.round((hours * 60) / 15));
-    const recent = (json.data || []).slice(-keep);
-    const labels = recent.map(p => new Date(p.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    const prices = recent.map(p => Number(p.priceUsd));
-    return { labels, prices };
+    return fetchCoinCapHistory(hours);
   }
 
   const cgUrl = `${COINGECKO_BASE}/coins/bitcoin/market_chart?vs_currency=usd&days=1&interval=hourly`;
@@ -309,48 +344,6 @@ export async function fetchBtcHistory(hours: number): Promise<{ labels: string[]
     const prices = slice.map(([, price]) => price);
     return { labels, prices };
   } catch (_e: any) {
-    const now = Date.now();
-    const rangeMs = hours * 60 * 60 * 1000;
-    const start = now - rangeMs;
-    const withRange = `${COINCAP_BASE}/assets/bitcoin/history?interval=m15&start=${start}&end=${now}`;
-    const noRange = `${COINCAP_BASE}/assets/bitcoin/history?interval=m15`;
-
-    let res = await fetch(withRange, { headers: { accept: 'application/json' } });
-    if (!res.ok) {
-      res = await fetch(noRange, { headers: { accept: 'application/json' } });
-    }
-    let points: Array<{ priceUsd: string; time: number }> = [];
-    if (res.ok) {
-      const json = await res.json() as { data: Array<{ priceUsd: string; time: number }> };
-      points = json.data || [];
-    }
-    if (!points.length) {
-      const candlesUrl = `${COINCAP_BASE}/candles?exchange=binance&interval=m15&baseId=bitcoin&quoteId=tether&start=${start}&end=${now}`;
-      let cRes = await fetch(candlesUrl, { headers: { accept: 'application/json' } });
-      if (!cRes.ok) {
-        const candlesH1 = `${COINCAP_BASE}/candles?exchange=binance&interval=h1&baseId=bitcoin&quoteId=tether&start=${start}&end=${now}`;
-        cRes = await fetch(candlesH1, { headers: { accept: 'application/json' } });
-      }
-      if (cRes.ok) {
-        const cjson = await cRes.json() as { data: Array<{ period: number; close: number }> };
-        const cpoints = (cjson.data || []);
-        const keep = Math.max(1, Math.round((hours * 60) / 15));
-        const latest = cpoints.slice(-keep);
-        if (latest.length) {
-          const labels = latest.map(p => new Date(p.period).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-          const prices = latest.map(p => Number(p.close));
-          return { labels, prices };
-        }
-      }
-    if (!res.ok) {
-      console.warn(`CoinCap chart failed: ${res.status}; using mock data`);
-      return mockBtcLast6h();
-    }
-    }
-    const keep = Math.max(1, Math.round((hours * 60) / 15));
-    const recent = points.slice(-keep);
-    const labels = recent.map(p => new Date(p.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    const prices = recent.map(p => Number(p.priceUsd));
-    return { labels, prices };
+    return fetchCoinCapHistory(hours);
   }
 }
