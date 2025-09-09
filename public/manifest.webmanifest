@@ -1,10 +1,17 @@
 {
-  "name": "Meta Scifor",
+  "name": "Meta Scifor Technologies",
   "short_name": "MetaScifor",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#111827",
   "description": "BTC, ETH, DOGE prices with a BTC trend chart.",
-  "icons": []
+  "icons": [
+    {
+      "src": "/icons/meta-scifor.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
 }

@@ -1,4 +1,4 @@
-Project: Meta Scifor — Live Crypto Dashboard
+Project: Meta Scifor Technologies — Live Crypto Dashboard
 
 Objective
 - Build a responsive dashboard that fetches and displays live cryptocurrency data for BTC, ETH, and DOGE.
@@ -35,4 +35,3 @@ Environment
   - `VITE_USE_COINCAP_ONLY` (true to use CoinCap; false to use CoinGecko)
   - `VITE_COINGECKO_API_KEY` (CoinGecko key)
   - Optional: `VITE_DISABLE_COINCAP_FALLBACK=true` to avoid CoinCap when using CoinGecko
-

@@ -48,7 +48,7 @@ export default function App() {
 
   useEffect(() => {
     // Ensure tab title shows the correct app name
-    document.title = 'Meta Scifor';
+    document.title = 'Meta Scifor Technologies';
     load();
   }, [rangeHours]);
 
@@ -65,9 +65,12 @@ export default function App() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
       <header className="mb-4 sm:mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold sm:text-3xl">Meta Scifor</h1>
-          <p className="text-sm text-gray-500">Interactive crypto glance: BTC, ETH, DOGE</p>
+        <div className="flex items-center gap-3">
+          <img src="/icons/meta-scifor.svg" alt="Meta Scifor" className="h-9 w-9" />
+          <div>
+            <h1 className="text-2xl font-bold sm:text-3xl">Meta Scifor Technologies</h1>
+            <p className="text-sm text-gray-500">Interactive crypto glance: BTC, ETH, DOGE</p>
+          </div>
         </div>
         <div className="text-xs text-gray-400">{lastUpdatedText && `Last update: ${lastUpdatedText}`}</div>
       </header>
