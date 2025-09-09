@@ -3,7 +3,10 @@ import type { CoinId, MarketChartResponse, SimplePriceResponse, TickerData } fro
 // Offline-first: disable live APIs by default unless explicitly enabled
 const DEV = (import.meta as any).env?.DEV as boolean | undefined;
 const ENABLE_API = ((import.meta as any).env?.VITE_ENABLE_API as string | undefined) === 'true';
-const USE_COINCAP_ONLY = ((import.meta as any).env?.VITE_USE_COINCAP_ONLY as string | undefined) === 'true';
+// If no CoinGecko API key is provided, skip hitting CoinGecko entirely. This
+// avoids noisy 401 errors in development where the key is usually absent.
+const CG_KEY = (import.meta as any).env?.VITE_COINGECKO_API_KEY as string | undefined;
+const USE_COINCAP_ONLY = !CG_KEY || ((import.meta as any).env?.VITE_USE_COINCAP_ONLY as string | undefined) === 'true';
 // In dev, use Vite proxy to avoid CORS. In prod, hit APIs directly.
 const COINGECKO_BASE = DEV ? '/coingecko/api/v3' : 'https://api.coingecko.com/api/v3';
 const COINCAP_BASE = DEV ? '/coincap/v2' : 'https://api.coincap.io/v2';
@@ -16,11 +19,10 @@ const COINS: Record<CoinId, { name: string; symbol: string }> = {
 
 function buildHeaders(): HeadersInit {
   const headers: HeadersInit = { accept: 'application/json' };
-  const key = (import.meta as any).env?.VITE_COINGECKO_API_KEY as string | undefined;
-  if (key) {
+  if (CG_KEY) {
     // CoinGecko free API now requires an API key header.
     // Header name can be 'x-cg-api-key' (free) or 'X-CG-Pro-API-Key' (pro).
-    headers['x-cg-api-key' as any] = key;
+    headers['x-cg-api-key' as any] = CG_KEY;
   }
   return headers;
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PriceCard } from './components/PriceCard';
 import { PriceChart } from './components/PriceChart';
 import { fetchBtcHistory, fetchSimplePrices } from './lib/api';
