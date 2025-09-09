@@ -38,6 +38,8 @@ export default function App() {
   }
 
   useEffect(() => {
+    // Ensure tab title shows the correct app name
+    document.title = 'Meta Scifor';
     load();
   }, [rangeHours]);
 
