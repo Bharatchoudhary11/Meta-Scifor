@@ -1,8 +1,8 @@
 import type { CoinId, MarketChartResponse, SimplePriceResponse, TickerData } from '../types';
 
-// Offline-first: disable live APIs by default unless explicitly enabled
+// Enable live APIs by default. Set VITE_ENABLE_API=false to use mock data.
 const DEV = (import.meta as any).env?.DEV as boolean | undefined;
-const ENABLE_API = ((import.meta as any).env?.VITE_ENABLE_API as string | undefined) === 'true';
+const ENABLE_API = ((import.meta as any).env?.VITE_ENABLE_API as string | undefined) !== 'false';
 // If no CoinGecko API key is provided, skip hitting CoinGecko entirely. This
 // avoids noisy 401 errors in development where the key is usually absent.
 const CG_KEY = (import.meta as any).env?.VITE_COINGECKO_API_KEY as string | undefined;
