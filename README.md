@@ -14,8 +14,21 @@ Quick Start
 3) Open the local URL Vite prints (usually http://localhost:5173).
 
 Notes
-- API endpoints:
-  - Simple prices: https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,dogecoin&vs_currencies=usd&include_24hr_change=true
-  - BTC market chart: https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1&interval=hourly
-- No API keys required for these public endpoints. Rate limits may apply.
+- Primary API: CoinGecko (with optional API key)
+- Automatic fallback: CoinCap (no key) if CoinGecko returns 401/403
+- Endpoints used:
+  - CoinGecko prices: /simple/price
+  - CoinGecko chart: /coins/bitcoin/market_chart
+  - CoinCap prices fallback: /v2/assets?ids=bitcoin,ethereum,dogecoin
+  - CoinCap chart fallback: /v2/assets/bitcoin/history?interval=m15&start=...&end=...
 
+CoinGecko API Key (401 fixes)
+- CoinGecko now often requires an API key. If 401/403 occurs, the app will automatically fall back to CoinCap.
+- To keep using CoinGecko, add a free key:
+  1) Create a key in your CoinGecko account.
+  2) Add `.env.local` with:
+     - VITE_COINGECKO_API_KEY=your_key_here
+  3) Restart `npm run dev`. The app sends it via `x-cg-api-key`.
+
+Manifest console warning
+- If your browser logs: `Manifest: Line: 1, column: 1, Syntax error.` it means the browser tried to load a Web App Manifest but the response wasn’t valid JSON (often a 404 HTML page). This is harmless for this app. You can ignore it or add a valid manifest if you plan to make the app a PWA.
