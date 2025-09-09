@@ -20,9 +20,10 @@ const COINS: Record<CoinId, { name: string; symbol: string }> = {
 function buildHeaders(): HeadersInit {
   const headers: HeadersInit = { accept: 'application/json' };
   if (CG_KEY) {
-    // CoinGecko free API now requires an API key header.
-    // Header name can be 'x-cg-api-key' (free) or 'X-CG-Pro-API-Key' (pro).
-    headers['x-cg-api-key' as any] = CG_KEY;
+    // CoinGecko free API now requires a demo key header.
+    // The header name is 'x-cg-demo-api-key' for free/demo keys and
+    // 'X-CG-Pro-API-Key' for pro keys.
+    headers['x-cg-demo-api-key' as any] = CG_KEY;
   }
   return headers;
 }
@@ -273,6 +274,22 @@ export async function fetchBtcHistory(hours: number): Promise<{ labels: string[]
       labels.push(new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       prices.push(price);
     }
+    return { labels, prices };
+  }
+
+  if (USE_COINCAP_ONLY) {
+    // Safety margin to avoid future timestamps if system clock is ahead
+    const now = Date.now() - 120_000;
+    const rangeMs = hours * 60 * 60 * 1000;
+    const start = now - rangeMs;
+    const ccUrl = `${COINCAP_BASE}/assets/bitcoin/history?interval=m15&start=${start}&end=${now}`;
+    const res = await fetch(ccUrl, { headers: { accept: 'application/json' } });
+    if (!res.ok) throw new Error(`CoinCap chart failed: ${res.status}`);
+    const json = await res.json() as { data: Array<{ priceUsd: string; time: number }> };
+    const keep = Math.max(1, Math.round((hours * 60) / 15));
+    const recent = (json.data || []).slice(-keep);
+    const labels = recent.map(p => new Date(p.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    const prices = recent.map(p => Number(p.priceUsd));
     return { labels, prices };
   }
 
