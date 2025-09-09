@@ -4,9 +4,9 @@ import type { CoinId, MarketChartResponse, SimplePriceResponse, TickerData } fro
 const DEV = (import.meta as any).env?.DEV as boolean | undefined;
 const ENABLE_API = ((import.meta as any).env?.VITE_ENABLE_API as string | undefined) === 'true';
 const USE_COINCAP_ONLY = ((import.meta as any).env?.VITE_USE_COINCAP_ONLY as string | undefined) === 'true';
-// In dev, use Vite proxy to avoid CORS. In prod, hit CG directly.
+// In dev, use Vite proxy to avoid CORS. In prod, hit APIs directly.
 const COINGECKO_BASE = DEV ? '/coingecko/api/v3' : 'https://api.coingecko.com/api/v3';
-const COINCAP_BASE = 'https://api.coincap.io/v2';
+const COINCAP_BASE = DEV ? '/coincap/v2' : 'https://api.coincap.io/v2';
 
 const COINS: Record<CoinId, { name: string; symbol: string }> = {
   bitcoin: { name: 'Bitcoin', symbol: 'BTC' },
@@ -86,20 +86,39 @@ export async function fetchSimplePrices(): Promise<TickerData[]> {
 
   if (USE_COINCAP_ONLY) {
     const ccUrl = `${COINCAP_BASE}/assets?ids=bitcoin,ethereum,dogecoin`;
-    const ccRes = await fetch(ccUrl, { headers: { accept: 'application/json' } });
-    if (!ccRes.ok) throw new Error(`CoinCap price failed: ${ccRes.status}`);
-    const { data } = await ccRes.json() as { data: Array<{ id: string; name: string; symbol: string; priceUsd: string; changePercent24Hr: string }> };
-    const byId = new Map(data.map((d) => [d.id, d]));
-    return ids.map((id) => {
-      const d = byId.get(id)!;
-      return {
+    let ccRes = await fetch(ccUrl, { headers: { accept: 'application/json' } });
+    if (ccRes.ok) {
+      const { data } = await ccRes.json() as { data: Array<{ id: string; name: string; symbol: string; priceUsd: string; changePercent24Hr: string }> };
+      const byId = new Map(data.map((d) => [d.id, d]));
+      return ids.map((id) => {
+        const d = byId.get(id)!;
+        return {
+          id,
+          name: COINS[id].name,
+          symbol: COINS[id].symbol,
+          priceUsd: Number(d.priceUsd),
+          change24hPercent: Number(d.changePercent24Hr),
+        } as TickerData;
+      });
+    }
+    // Group endpoint failed (e.g., 404). Try individual endpoints.
+    const results: TickerData[] = [];
+    for (const id of ids) {
+      const r = await fetch(`${COINCAP_BASE}/assets/${id}`, { headers: { accept: 'application/json' } });
+      if (!r.ok) continue;
+      const { data } = await r.json() as { data: { id: string; name: string; symbol: string; priceUsd: string; changePercent24Hr: string } };
+      results.push({
         id,
         name: COINS[id].name,
         symbol: COINS[id].symbol,
-        priceUsd: Number(d.priceUsd),
-        change24hPercent: Number(d.changePercent24Hr),
-      } as TickerData;
-    });
+        priceUsd: Number(data.priceUsd),
+        change24hPercent: Number(data.changePercent24Hr),
+      });
+    }
+    if (results.length === ids.length) return results;
+    // As a last resort, do not error—return mock to keep UI functional.
+    console.warn('CoinCap price failed; using mock data');
+    return mockTickers();
   }
 
   try {
@@ -119,20 +138,37 @@ export async function fetchSimplePrices(): Promise<TickerData[]> {
   } catch (_e: any) {
     // Fallback to CoinCap (no key required) on any failure (auth, CORS, network)
     const ccUrl = `${COINCAP_BASE}/assets?ids=bitcoin,ethereum,dogecoin`;
-    const ccRes = await fetch(ccUrl, { headers: { accept: 'application/json' } });
-    if (!ccRes.ok) throw new Error(`CoinCap price failed: ${ccRes.status}`);
-    const { data } = await ccRes.json() as { data: Array<{ id: string; name: string; symbol: string; priceUsd: string; changePercent24Hr: string }> };
-    const byId = new Map(data.map((d) => [d.id, d]));
-    return ids.map((id) => {
-      const d = byId.get(id)!;
-      return {
+    let ccRes = await fetch(ccUrl, { headers: { accept: 'application/json' } });
+    if (ccRes.ok) {
+      const { data } = await ccRes.json() as { data: Array<{ id: string; name: string; symbol: string; priceUsd: string; changePercent24Hr: string }> };
+      const byId = new Map(data.map((d) => [d.id, d]));
+      return ids.map((id) => {
+        const d = byId.get(id)!;
+        return {
+          id,
+          name: COINS[id].name,
+          symbol: COINS[id].symbol,
+          priceUsd: Number(d.priceUsd),
+          change24hPercent: Number(d.changePercent24Hr),
+        } as TickerData;
+      });
+    }
+    const results: TickerData[] = [];
+    for (const id of ids) {
+      const r = await fetch(`${COINCAP_BASE}/assets/${id}`, { headers: { accept: 'application/json' } });
+      if (!r.ok) continue;
+      const { data } = await r.json() as { data: { id: string; name: string; symbol: string; priceUsd: string; changePercent24Hr: string } };
+      results.push({
         id,
         name: COINS[id].name,
         symbol: COINS[id].symbol,
-        priceUsd: Number(d.priceUsd),
-        change24hPercent: Number(d.changePercent24Hr),
-      } as TickerData;
-    });
+        priceUsd: Number(data.priceUsd),
+        change24hPercent: Number(data.changePercent24Hr),
+      });
+    }
+    if (results.length === ids.length) return results;
+    console.warn('CoinCap price failed; using mock data');
+    return mockTickers();
   }
 }
 
@@ -142,7 +178,8 @@ export async function fetchBtcLast6h(): Promise<{ labels: string[]; prices: numb
   // Use 1-day hourly data and keep last 6 hours
   const url = `${COINGECKO_BASE}/coins/bitcoin/market_chart?vs_currency=usd&days=1&interval=hourly`;
   if (USE_COINCAP_ONLY) {
-    const now = Date.now();
+    // Safety margin to avoid future timestamps if system clock is ahead
+    const now = Date.now() - 120_000;
     const sixHoursMs = 6 * 60 * 60 * 1000;
     const start = now - sixHoursMs;
     const ccUrl = `${COINCAP_BASE}/assets/bitcoin/history?interval=m15&start=${start}&end=${now}`;
@@ -162,7 +199,7 @@ export async function fetchBtcLast6h(): Promise<{ labels: string[]; prices: numb
     }
     const json = (await res.json()) as MarketChartResponse;
 
-    const now = Date.now();
+    const now = Date.now() - 120_000;
     const sixHoursMs = 6 * 60 * 60 * 1000;
     const filtered = json.prices.filter(([ts]) => now - ts <= sixHoursMs);
     const slice = filtered.length > 0 ? filtered : json.prices.slice(-6);
@@ -207,7 +244,10 @@ export async function fetchBtcLast6h(): Promise<{ labels: string[]; prices: numb
         }
       }
       // If candles also failed, throw the latest status we have
-      if (!res.ok) throw new Error(`CoinCap chart failed: ${res.status}`);
+      if (!res.ok) {
+        console.warn(`CoinCap chart failed: ${res.status}; using mock data`);
+        return mockBtcLast6h();
+      }
     }
     // Keep roughly last 6h worth of 15-min points (~24 points)
     const recent = points.slice(-24);
@@ -283,7 +323,10 @@ export async function fetchBtcHistory(hours: number): Promise<{ labels: string[]
           return { labels, prices };
         }
       }
-      if (!res.ok) throw new Error(`CoinCap chart failed: ${res.status}`);
+    if (!res.ok) {
+      console.warn(`CoinCap chart failed: ${res.status}; using mock data`);
+      return mockBtcLast6h();
+    }
     }
     const keep = Math.max(1, Math.round((hours * 60) / 15));
     const recent = points.slice(-keep);

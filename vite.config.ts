@@ -12,6 +12,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/coingecko/, ''),
       },
+      // Proxy CoinCap as well
+      '/coincap': {
+        target: 'https://api.coincap.io',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/coincap/, ''),
+      },
     },
   },
 });
