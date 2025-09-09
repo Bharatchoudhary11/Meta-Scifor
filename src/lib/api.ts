@@ -216,3 +216,79 @@ export async function fetchBtcLast6h(): Promise<{ labels: string[]; prices: numb
     return { labels, prices };
   }
 }
+
+export async function fetchBtcHistory(hours: number): Promise<{ labels: string[]; prices: number[] }> {
+  if (!ENABLE_API) {
+    const points = Math.max(1, Math.round((hours * 60) / 15));
+    const now = Date.now();
+    const step = 15 * 60 * 1000;
+    let price = (mockLastPrices?.bitcoin ?? basePrices.bitcoin) * 0.98;
+    const labels: string[] = [];
+    const prices: number[] = [];
+    for (let i = points - 1; i >= 0; i--) {
+      const ts = now - i * step;
+      price = randomWalk(price, 0.004);
+      labels.push(new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      prices.push(price);
+    }
+    return { labels, prices };
+  }
+
+  const cgUrl = `${COINGECKO_BASE}/coins/bitcoin/market_chart?vs_currency=usd&days=1&interval=hourly`;
+  try {
+    const res = await fetch(cgUrl, { headers: buildHeaders() });
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) throw new Error('cg-auth');
+      throw new Error(`Chart fetch failed: ${res.status}`);
+    }
+    const json = (await res.json()) as MarketChartResponse;
+    const now = Date.now();
+    const rangeMs = hours * 60 * 60 * 1000;
+    const filtered = json.prices.filter(([ts]) => now - ts <= rangeMs);
+    const slice = filtered.length > 0 ? filtered : json.prices.slice(-Math.max(1, Math.round(hours)));
+    const labels = slice.map(([ts]) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    const prices = slice.map(([, price]) => price);
+    return { labels, prices };
+  } catch (_e: any) {
+    const now = Date.now();
+    const rangeMs = hours * 60 * 60 * 1000;
+    const start = now - rangeMs;
+    const withRange = `${COINCAP_BASE}/assets/bitcoin/history?interval=m15&start=${start}&end=${now}`;
+    const noRange = `${COINCAP_BASE}/assets/bitcoin/history?interval=m15`;
+
+    let res = await fetch(withRange, { headers: { accept: 'application/json' } });
+    if (!res.ok) {
+      res = await fetch(noRange, { headers: { accept: 'application/json' } });
+    }
+    let points: Array<{ priceUsd: string; time: number }> = [];
+    if (res.ok) {
+      const json = await res.json() as { data: Array<{ priceUsd: string; time: number }> };
+      points = json.data || [];
+    }
+    if (!points.length) {
+      const candlesUrl = `${COINCAP_BASE}/candles?exchange=binance&interval=m15&baseId=bitcoin&quoteId=tether&start=${start}&end=${now}`;
+      let cRes = await fetch(candlesUrl, { headers: { accept: 'application/json' } });
+      if (!cRes.ok) {
+        const candlesH1 = `${COINCAP_BASE}/candles?exchange=binance&interval=h1&baseId=bitcoin&quoteId=tether&start=${start}&end=${now}`;
+        cRes = await fetch(candlesH1, { headers: { accept: 'application/json' } });
+      }
+      if (cRes.ok) {
+        const cjson = await cRes.json() as { data: Array<{ period: number; close: number }> };
+        const cpoints = (cjson.data || []);
+        const keep = Math.max(1, Math.round((hours * 60) / 15));
+        const latest = cpoints.slice(-keep);
+        if (latest.length) {
+          const labels = latest.map(p => new Date(p.period).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          const prices = latest.map(p => Number(p.close));
+          return { labels, prices };
+        }
+      }
+      if (!res.ok) throw new Error(`CoinCap chart failed: ${res.status}`);
+    }
+    const keep = Math.max(1, Math.round((hours * 60) / 15));
+    const recent = points.slice(-keep);
+    const labels = recent.map(p => new Date(p.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    const prices = recent.map(p => Number(p.priceUsd));
+    return { labels, prices };
+  }
+}

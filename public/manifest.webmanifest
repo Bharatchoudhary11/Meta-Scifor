@@ -1,6 +1,6 @@
 {
-  "name": "Live Crypto Dashboard",
-  "short_name": "CryptoDash",
+  "name": "Meta Scifor",
+  "short_name": "MetaScifor",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -8,4 +8,3 @@
   "description": "BTC, ETH, DOGE prices with a BTC trend chart.",
   "icons": []
 }
-
